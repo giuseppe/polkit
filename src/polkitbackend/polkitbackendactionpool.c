@@ -90,9 +90,9 @@ static const gchar *_localize (GHashTable *translations,
 typedef struct
 {
   /* directory with .policy files, e.g. /usr/share/polkit-1/actions */
-  GFile *directory;
+  GFile *usr_directory;
 
-  GFileMonitor *dir_monitor;
+  GFileMonitor *usr_dir_monitor;
 
   /* maps from action_id to a ParsedAction struct */
   GHashTable *parsed_actions;
@@ -108,7 +108,7 @@ typedef struct
 enum
 {
   PROP_0,
-  PROP_DIRECTORY,
+  PROP_USR_DIRECTORY,
 };
 
 #define POLKIT_BACKEND_ACTION_POOL_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), POLKIT_BACKEND_TYPE_ACTION_POOL, PolkitBackendActionPoolPrivate))
@@ -150,11 +150,11 @@ polkit_backend_action_pool_finalize (GObject *object)
   pool = POLKIT_BACKEND_ACTION_POOL (object);
   priv = POLKIT_BACKEND_ACTION_POOL_GET_PRIVATE (pool);
 
-  if (priv->directory != NULL)
-    g_object_unref (priv->directory);
+  if (priv->usr_directory != NULL)
+    g_object_unref (priv->usr_directory);
 
-  if (priv->dir_monitor != NULL)
-    g_object_unref (priv->dir_monitor);
+  if (priv->usr_dir_monitor != NULL)
+    g_object_unref (priv->usr_dir_monitor);
 
   if (priv->parsed_actions != NULL)
     g_hash_table_unref (priv->parsed_actions);
@@ -179,8 +179,8 @@ polkit_backend_action_pool_get_property (GObject     *object,
 
   switch (prop_id)
     {
-    case PROP_DIRECTORY:
-      g_value_set_object (value, priv->directory);
+    case PROP_USR_DIRECTORY:
+      g_value_set_object (value, priv->usr_directory);
       break;
 
     default:
@@ -252,22 +252,22 @@ polkit_backend_action_pool_set_property (GObject       *object,
 
   switch (prop_id)
     {
-    case PROP_DIRECTORY:
-      priv->directory = g_value_dup_object (value);
+    case PROP_USR_DIRECTORY:
+      priv->usr_directory = g_value_dup_object (value);
 
       error = NULL;
-      priv->dir_monitor = g_file_monitor_directory (priv->directory,
-                                                    G_FILE_MONITOR_NONE,
-                                                    NULL,
-                                                    &error);
-      if (priv->dir_monitor == NULL)
+      priv->usr_dir_monitor = g_file_monitor_directory (priv->usr_directory,
+                                                        G_FILE_MONITOR_NONE,
+                                                        NULL,
+                                                        &error);
+      if (priv->usr_dir_monitor == NULL)
         {
           g_warning ("Error monitoring actions directory: %s", error->message);
           g_error_free (error);
         }
       else
         {
-          g_signal_connect (priv->dir_monitor,
+          g_signal_connect (priv->usr_dir_monitor,
                             "changed",
                             (GCallback) dir_monitor_changed,
                             pool);
@@ -297,7 +297,7 @@ polkit_backend_action_pool_class_init (PolkitBackendActionPoolClass *klass)
    * The directory to load action description files from.
    */
   g_object_class_install_property (gobject_class,
-                                   PROP_DIRECTORY,
+                                   PROP_USR_DIRECTORY,
                                    g_param_spec_object ("directory",
                                                         "Directory",
                                                         "Directory to load action description files from",
@@ -516,7 +516,7 @@ ensure_all_files (PolkitBackendActionPool *pool)
     goto out;
 
   error = NULL;
-  e = g_file_enumerate_children (priv->directory,
+  e = g_file_enumerate_children (priv->usr_directory,
                                  "standard::name",
                                  G_FILE_QUERY_INFO_NONE,
                                  NULL,
@@ -537,7 +537,7 @@ ensure_all_files (PolkitBackendActionPool *pool)
         {
           GFile *file;
 
-          file = g_file_get_child (priv->directory, name);
+          file = g_file_get_child (priv->usr_directory, name);
 
           ensure_file (pool, file);
 
