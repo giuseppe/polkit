@@ -970,7 +970,21 @@
        xml:space="preserve"
        style="font-size:12px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
        x="445.0928"
-       y="434.35934"
+       y="444.35934"
+       id="text13594-3"
+       inkscape:export-filename="/home/davidz/Hacking/polkit/docs/polkit-architecture.png"
+       inkscape:export-xdpi="96.720001"
+       inkscape:export-ydpi="96.720001"><tspan
+         sodipodi:role="line"
+         x="445.0928"
+         y="464.35934"
+         style="text-align:center;text-anchor:middle"
+         id="tspan740-0">/usr/share/polkit-1/actions/*.policy</tspan></text>
+    <text
+       xml:space="preserve"
+       style="font-size:12px;font-style:normal;font-weight:normal;fill:#000000;fill-opacity:1;stroke:none;font-family:Bitstream Vera Sans"
+       x="445.0928"
+       y="424.35934"
        id="text13594-3"
        inkscape:export-filename="/home/davidz/Hacking/polkit/docs/polkit-architecture.png"
        inkscape:export-xdpi="96.720001"
@@ -979,7 +993,7 @@
          x="445.0928"
          y="434.35934"
          style="text-align:center;text-anchor:middle"
-         id="tspan740-0">/usr/share/polkit-1/actions/*.policy</tspan></text>
+         id="tspan740-0">/etc/polkit-1/actions/*.policy</tspan></text>
     <rect
        style="fill:url(#linearGradient4001);fill-opacity:1;stroke:#030000;stroke-width:0.80120724;stroke-linecap:butt;stroke-linejoin:round;stroke-miterlimit:4;stroke-opacity:1;stroke-dasharray:none;stroke-dashoffset:19"
        id="rect7676-4-5-7"

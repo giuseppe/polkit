@@ -291,7 +291,7 @@ static void
 polkit_backend_interactive_authority_init (PolkitBackendInteractiveAuthority *authority)
 {
   PolkitBackendInteractiveAuthorityPrivate *priv;
-  GFile *directory;
+  GFile *usr_directory, *etc_directory;
   GError *error;
 
   /* Force registering error domain */
@@ -299,9 +299,11 @@ polkit_backend_interactive_authority_init (PolkitBackendInteractiveAuthority *au
 
   priv = POLKIT_BACKEND_INTERACTIVE_AUTHORITY_GET_PRIVATE (authority);
 
-  directory = g_file_new_for_path (PACKAGE_DATA_DIR "/polkit-1/actions");
-  priv->action_pool = polkit_backend_action_pool_new (directory);
-  g_object_unref (directory);
+  usr_directory = g_file_new_for_path (PACKAGE_DATA_DIR "/polkit-1/actions");
+  etc_directory = g_file_new_for_path (PACKAGE_SYSCONF_DIR "/polkit-1/actions");
+  priv->action_pool = polkit_backend_action_pool_new (usr_directory, etc_directory);
+  g_object_unref (usr_directory);
+  g_object_unref (etc_directory);
   g_signal_connect (priv->action_pool,
                     "changed",
                     (GCallback) action_pool_changed,

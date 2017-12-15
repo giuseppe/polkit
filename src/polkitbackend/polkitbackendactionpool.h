@@ -64,7 +64,7 @@ struct _PolkitBackendActionPoolClass
 };
 
 GType                    polkit_backend_action_pool_get_type         (void) G_GNUC_CONST;
-PolkitBackendActionPool *polkit_backend_action_pool_new              (GFile *usr_directory);
+PolkitBackendActionPool *polkit_backend_action_pool_new              (GFile *usr_directory, GFile *etc_directory);
 GList                   *polkit_backend_action_pool_get_all_actions  (PolkitBackendActionPool  *pool,
                                                                       const gchar              *locale);
 

@@ -94,6 +94,11 @@ typedef struct
 
   GFileMonitor *usr_dir_monitor;
 
+  /* directory with .policy files, e.g. /etc/polkit-1/actions */
+  GFile *etc_directory;
+
+  GFileMonitor *etc_dir_monitor;
+
   /* maps from action_id to a ParsedAction struct */
   GHashTable *parsed_actions;
 
@@ -109,6 +114,7 @@ enum
 {
   PROP_0,
   PROP_USR_DIRECTORY,
+  PROP_ETC_DIRECTORY,
 };
 
 #define POLKIT_BACKEND_ACTION_POOL_GET_PRIVATE(o) (G_TYPE_INSTANCE_GET_PRIVATE ((o), POLKIT_BACKEND_TYPE_ACTION_POOL, PolkitBackendActionPoolPrivate))
@@ -153,8 +159,14 @@ polkit_backend_action_pool_finalize (GObject *object)
   if (priv->usr_directory != NULL)
     g_object_unref (priv->usr_directory);
 
+  if (priv->etc_directory != NULL)
+    g_object_unref (priv->etc_directory);
+
   if (priv->usr_dir_monitor != NULL)
     g_object_unref (priv->usr_dir_monitor);
+
+  if (priv->etc_dir_monitor != NULL)
+    g_object_unref (priv->etc_dir_monitor);
 
   if (priv->parsed_actions != NULL)
     g_hash_table_unref (priv->parsed_actions);
@@ -181,6 +193,10 @@ polkit_backend_action_pool_get_property (GObject     *object,
     {
     case PROP_USR_DIRECTORY:
       g_value_set_object (value, priv->usr_directory);
+      break;
+
+    case PROP_ETC_DIRECTORY:
+      g_value_set_object (value, priv->etc_directory);
       break;
 
     default:
@@ -274,6 +290,28 @@ polkit_backend_action_pool_set_property (GObject       *object,
         }
       break;
 
+    case PROP_ETC_DIRECTORY:
+      priv->etc_directory = g_value_dup_object (value);
+
+      error = NULL;
+      priv->etc_dir_monitor = g_file_monitor_directory (priv->etc_directory,
+                                                        G_FILE_MONITOR_NONE,
+                                                        NULL,
+                                                        &error);
+      if (priv->etc_dir_monitor == NULL)
+        {
+          g_warning ("Error monitoring actions directory: %s", error->message);
+          g_error_free (error);
+        }
+      else
+        {
+          g_signal_connect (priv->etc_dir_monitor,
+                            "changed",
+                            (GCallback) dir_monitor_changed,
+                            pool);
+        }
+      break;
+
     default:
       G_OBJECT_WARN_INVALID_PROPERTY_ID (object, prop_id, pspec);
       break;
@@ -298,9 +336,20 @@ polkit_backend_action_pool_class_init (PolkitBackendActionPoolClass *klass)
    */
   g_object_class_install_property (gobject_class,
                                    PROP_USR_DIRECTORY,
-                                   g_param_spec_object ("directory",
+                                   g_param_spec_object ("usrdirectory",
                                                         "Directory",
                                                         "Directory to load action description files from",
+                                                        G_TYPE_FILE,
+                                                        G_PARAM_READWRITE |
+                                                        G_PARAM_CONSTRUCT_ONLY |
+                                                        G_PARAM_STATIC_NAME |
+                                                        G_PARAM_STATIC_NICK |
+                                                        G_PARAM_STATIC_BLURB));
+  g_object_class_install_property (gobject_class,
+                                   PROP_ETC_DIRECTORY,
+                                   g_param_spec_object ("etcdirectory",
+                                                        "Etc directory",
+                                                        "Alternative directory to load action description files from",
                                                         G_TYPE_FILE,
                                                         G_PARAM_READWRITE |
                                                         G_PARAM_CONSTRUCT_ONLY |
@@ -327,19 +376,21 @@ polkit_backend_action_pool_class_init (PolkitBackendActionPoolClass *klass)
 
 /**
  * polkit_backend_action_pool_new:
- * @directory: A #GFile for the directory holding PolicyKit action description files.
+ * @usr_directory: A #GFile for the directory holding PolicyKit action description files.
+ * @etc_directory: A #GFile for an alternative directory holding PolicyKit action description files.
  *
  * Creates a new #PolkitBackendPool that can be used for looking up #PolkitActionDescription objects.
  *
  * Returns: A #PolkitBackendActionPool. Free with g_object_unref().
  **/
 PolkitBackendActionPool *
-polkit_backend_action_pool_new (GFile *directory)
+polkit_backend_action_pool_new (GFile *usr_directory, GFile *etc_directory)
 {
   PolkitBackendActionPool *pool;
 
   pool = POLKIT_BACKEND_ACTION_POOL (g_object_new (POLKIT_BACKEND_TYPE_ACTION_POOL,
-                                                   "directory", directory,
+                                                   "usrdirectory", usr_directory,
+                                                   "etcdirectory", etc_directory,
                                                    NULL));
 
   return pool;
@@ -500,8 +551,8 @@ ensure_file (PolkitBackendActionPool *pool,
   g_free (uri);
 }
 
-static void
-ensure_all_files (PolkitBackendActionPool *pool)
+static gboolean
+ensure_all_files_directory (PolkitBackendActionPool *pool, GFile *directory)
 {
   PolkitBackendActionPoolPrivate *priv;
   GFileEnumerator *e;
@@ -510,13 +561,8 @@ ensure_all_files (PolkitBackendActionPool *pool)
 
   priv = POLKIT_BACKEND_ACTION_POOL_GET_PRIVATE (pool);
 
-  e = NULL;
-
-  if (priv->has_loaded_all_files)
-    goto out;
-
   error = NULL;
-  e = g_file_enumerate_children (priv->usr_directory,
+  e = g_file_enumerate_children (directory,
                                  "standard::name",
                                  G_FILE_QUERY_INFO_NONE,
                                  NULL,
@@ -537,7 +583,7 @@ ensure_all_files (PolkitBackendActionPool *pool)
         {
           GFile *file;
 
-          file = g_file_get_child (priv->usr_directory, name);
+          file = g_file_get_child (directory, name);
 
           ensure_file (pool, file);
 
@@ -548,12 +594,31 @@ ensure_all_files (PolkitBackendActionPool *pool)
 
     } /* for all files */
 
-  priv->has_loaded_all_files = TRUE;
-
  out:
 
   if (e != NULL)
     g_object_unref (e);
+
+  return error == NULL;
+}
+
+static void
+ensure_all_files (PolkitBackendActionPool *pool)
+{
+  PolkitBackendActionPoolPrivate *priv;
+  gboolean success = TRUE;
+
+  priv = POLKIT_BACKEND_ACTION_POOL_GET_PRIVATE (pool);
+
+  if (priv->has_loaded_all_files)
+    return;
+
+  success &= ensure_all_files_directory (pool, priv->usr_directory);
+  if (success)
+    success &= ensure_all_files_directory (pool, priv->etc_directory);
+
+  if (success)
+    priv->has_loaded_all_files = TRUE;
 }
 
 /* ---------------------------------------------------------------------------------------------------- */
